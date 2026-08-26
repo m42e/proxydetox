@@ -85,7 +85,7 @@ impl Builder {
     pub async fn build(self) -> std::io::Result<Arc<Context>> {
         let auth = self.auth.unwrap_or(AuthenticatorFactory::None);
         let eval = if let Some(pac) = self.pac_script {
-            Evaluator::with_pac_script(&pac).unwrap_or_default()
+            Evaluator::with_pac_script(&pac).map_err(std::io::Error::other)?
         } else {
             Evaluator::new()
         };
@@ -142,7 +142,7 @@ fn default_tls_config() -> Arc<rustls::ClientConfig> {
 mod tests {
     use super::Builder;
     use detox_net::PathOrUri;
-    use paclib::{Proxy, ProxyOrDirect, Proxies};
+    use paclib::{Proxies, Proxy, ProxyOrDirect};
     use std::fs;
     use std::sync::Once;
 
@@ -192,12 +192,21 @@ mod tests {
     #[tokio::test]
     async fn build_reports_pac_file_failure() {
         init_crypto_provider();
-        let path = std::env::temp_dir().join(format!(
-            "proxydetox-pac-{}-missing.pac",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("proxydetox-pac-{}-missing.pac", std::process::id()));
         let result = Builder::default()
             .pac_file(Some(PathOrUri::from(path)))
+            .build()
+            .await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn build_reports_pac_script_failure() {
+        init_crypto_provider();
+        let result = Builder::default()
+            .pac_script("function brokenPacScript(url, host) {}".into())
             .build()
             .await;
 

@@ -80,7 +80,7 @@ impl Class for DnsCache {
 pub(crate) fn resolve(host: &str) -> Option<String> {
     use std::net::ToSocketAddrs;
 
-    select_address((host, 0u16).to_socket_addrs().ok()?.into_iter())
+    select_address((host, 0u16).to_socket_addrs().ok()?)
 }
 
 fn select_address(addresses: impl Iterator<Item = SocketAddr>) -> Option<String> {
@@ -108,7 +108,10 @@ mod tests {
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1)), 0),
         ];
 
-        assert_eq!(select_address(addresses.into_iter()), Some("192.0.2.1".into()));
+        assert_eq!(
+            select_address(addresses.into_iter()),
+            Some("192.0.2.1".into())
+        );
     }
 
     #[test]

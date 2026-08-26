@@ -101,8 +101,7 @@ impl Engine {
         let install_default_pac = pac_script.is_none();
         let mut js = Self::mkjs(self.my_ip_addr.clone(), install_default_pac);
         let pac_script = pac_script.unwrap_or(crate::DEFAULT_PAC_SCRIPT);
-        js
-            .eval(Source::from_bytes(pac_script))
+        js.eval(Source::from_bytes(pac_script))
             .map_err(|e| PacScriptError::InternalError(e.to_string()))?;
         if !install_default_pac {
             let find_proxy_fn = js
@@ -251,10 +250,10 @@ fn my_ip_address(
 mod tests {
     use super::Engine;
     use super::Uri;
-    use crate::Proxy;
-    use crate::Proxies;
-    use crate::ProxyOrDirect;
     use crate::FindProxyError;
+    use crate::Proxies;
+    use crate::Proxy;
+    use crate::ProxyOrDirect;
 
     #[test]
     fn test_find_proxy() -> Result<(), Box<dyn std::error::Error>> {
@@ -303,9 +302,10 @@ mod tests {
         )?;
         let uri = "http://localhost/".parse::<Uri>()?;
 
-        assert!(eval
-            .set_pac_script(Some("function FindProxyForURL(url, host) {"))
-            .is_err());
+        assert!(
+            eval.set_pac_script(Some("function FindProxyForURL(url, host) {"))
+                .is_err()
+        );
         assert_eq!(
             eval.find_proxy(&uri)?,
             Proxies::new(vec![ProxyOrDirect::Proxy(Proxy::Http(
