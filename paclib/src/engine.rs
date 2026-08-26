@@ -23,7 +23,7 @@ pub struct Engine {
 }
 
 impl Engine {
-    fn mkjs(my_ip_addr: Arc<Mutex<IpAddr>>) -> Context {
+    fn mkjs(my_ip_addr: Arc<Mutex<IpAddr>>, install_default_pac: bool) -> Context {
         let mut js = Context::default();
         js.runtime_limits_mut()
             .set_loop_iteration_limit(PAC_LOOP_ITERATION_LIMIT);
@@ -75,8 +75,10 @@ impl Engine {
 
         js.eval(Source::from_bytes(PAC_UTILS))
             .expect("eval pac_utils.js");
-        js.eval(Source::from_bytes(crate::DEFAULT_PAC_SCRIPT))
-            .expect("eval default PAC script");
+        if install_default_pac {
+            js.eval(Source::from_bytes(crate::DEFAULT_PAC_SCRIPT))
+                .expect("eval default PAC script");
+        }
         js
     }
 
@@ -84,7 +86,7 @@ impl Engine {
         let my_ip_addr = Arc::new(Mutex::new(IpAddr::from(std::net::Ipv4Addr::new(
             127, 0, 0, 1,
         ))));
-        let js = Self::mkjs(my_ip_addr.clone());
+        let js = Self::mkjs(my_ip_addr.clone(), true);
 
         Self { js, my_ip_addr }
     }
@@ -96,11 +98,21 @@ impl Engine {
     }
 
     pub fn set_pac_script(&mut self, pac_script: Option<&str>) -> Result<(), PacScriptError> {
-        let mut js = Self::mkjs(self.my_ip_addr.clone());
+        let install_default_pac = pac_script.is_none();
+        let mut js = Self::mkjs(self.my_ip_addr.clone(), install_default_pac);
         let pac_script = pac_script.unwrap_or(crate::DEFAULT_PAC_SCRIPT);
         js
             .eval(Source::from_bytes(pac_script))
             .map_err(|e| PacScriptError::InternalError(e.to_string()))?;
+        if !install_default_pac {
+            let find_proxy_fn = js
+                .global_object()
+                .get(js_string!("FindProxyForURL"), &mut js)
+                .map_err(|e| PacScriptError::InternalError(e.to_string()))?;
+            if !find_proxy_fn.is_callable() {
+                return Err(PacScriptError::FindProxyForURLMissing);
+            }
+        }
         self.js = js;
         Ok(())
     }
@@ -121,9 +133,13 @@ impl Engine {
             .js
             .global_object()
             .get(js_string!("FindProxyForURL"), &mut self.js)
-            .map_err(|e| FindProxyError::InternalError(e.to_string()))?
+            .map_err(|e| FindProxyError::InternalError(e.to_string()))?;
+        if !find_proxy_fn.is_callable() {
+            return Err(FindProxyError::FindProxyForURLMissing);
+        }
+        let find_proxy_fn = find_proxy_fn
             .as_object()
-            .ok_or(FindProxyError::FindProxyForURLMissing)?;
+            .expect("callable FindProxyForURL is an object");
 
         let uri = JsValue::from(JsString::from(uri.to_string()));
         let host = JsValue::from(JsString::from(host));
